@@ -1,10 +1,12 @@
-# Python-generated files
+# -------------------------
+# Python backend ignores
+# -------------------------
 __pycache__/
 *.py[cod]
+*.egg-info/
 build/
 dist/
 wheels/
-*.egg-info/
 
 # Virtual environments
 .venv/
@@ -16,41 +18,24 @@ env/
 .env.*
 !.env.example
 
-# SQLite database
+# Databases
 *.db
-*.sqlite
-*.sqlite3
-
-# Uploaded resumes / local files
-uploads/
-data/
-
-# Next.js
-.next/
-out/
-
-# Node
-node_modules/
+*.sqlite*
+*.pkl
+*.index
 
 # Logs
 *.log
 
-# IDE
-.vscode/
-.idea/
+# Uploaded / local data
+uploads/
+data/
 
-# OS
-.DS_Store
-Thumbs.db
-
-**/.git
-
-
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
+# -------------------------
+# Node / Next.js frontend ignores
+# -------------------------
+node_modules/
+.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -58,32 +43,35 @@ Thumbs.db
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
+# Next.js build outputs
+.next/
+out/
+build/
 
-# next.js
-/.next/
-/out/
+# Testing
+coverage/
+*.tsbuildinfo
+next-env.d.ts
 
-# production
-/build
+# Vercel deployment
+.vercel
 
-# misc
+# -------------------------
+# Misc / OS / IDE
+# -------------------------
+.vscode/
+.idea/
 .DS_Store
+Thumbs.db
 *.pem
 
-# debug
+# Debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# -------------------------
+# Prevent nested repos
+# -------------------------
+**/.git

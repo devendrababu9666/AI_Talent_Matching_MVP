@@ -7,7 +7,10 @@ SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
 
 def get_connection():
-    connection = sqlite3.connect(DB_PATH)
+    connection = sqlite3.connect(
+        DB_PATH,
+        check_same_thread=False,
+    )
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
