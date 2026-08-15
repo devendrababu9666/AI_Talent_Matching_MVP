@@ -15,7 +15,6 @@ def get_connection():
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
 
-
 def init_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     print("Database directory initialized.")

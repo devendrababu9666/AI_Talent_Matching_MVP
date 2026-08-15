@@ -6,7 +6,7 @@ import "./globals.css"
 const poppins = Poppins({
   variable: "--font-poppins",
   subsets: ["latin"],
-  weight: ["400", "600"], 
+  weight: ["400", "600"],
 })
 
 export const metadata: Metadata = {
@@ -18,25 +18,43 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${poppins.className} antialiased`}>
-        {/* <nav className="bg-[linear-gradient(110deg,#0F5FDC_0%,#0A6DB4_55%,#3341A5_100%)] text-white">
-          <div className="mx-auto flex h-16 max-w-7xl items-center px-6">
-            <Link href="/" className="text-xl font-semibold tracking-tight">
+        {/* Top navigation */}
+        <nav className="hcl-primary-gradient text-white shadow-sm">
+          <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
+            {/* Brand */}
+            <Link href="/" className="text-2xl font-black tracking-tight text-white">
               HCLTech
             </Link>
-          </div>
-        </nav> */}
-        <nav className="bg-[linear-gradient(110deg,#0F5FDC_0%,#0A6DB4_55%,#3341A5_100%)] text-white">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
 
-          {/* Brand */}
-          <Link
-            href="/"
-            className="text-xl font-semibold tracking-tight"
-          >
+            {/* Navigation links */}
+            <div className="flex items-center gap-3 text-sm font-bold">
+              <Link
+                href="/match-jd"
+                className="rounded-xl px-4 py-2 text-white/90 transition hover:bg-white/15 hover:text-white"
+              >
+                JD Matching
+              </Link>
+              <Link
+                href="/talent-search"
+                className="rounded-xl px-4 py-2 text-white/90 transition hover:bg-white/15 hover:text-white"
+              >
+                Talent Search
+              </Link>
+              <Link
+                href="/resume-upload"
+                className="rounded-xl px-4 py-2 text-white/90 transition hover:bg-white/15 hover:text-white"
+              >
+                Resume Upload
+              </Link>
+            </div>
+          </div>
+        </nav>
+
+        {/* Secondary nav (optional)
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
+          <Link href="/" className="text-xl font-semibold tracking-tight">
             HCLTech
           </Link>
-
-          {/* Navigation */}
           <div className="flex items-center gap-2">
             <Link
               href="/talent-search"
@@ -44,7 +62,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             >
               Talent Search
             </Link>
-
             <Link
               href="/match-jd"
               className="rounded-md px-4 py-2 text-sm font-medium transition hover:bg-white/10"
@@ -52,9 +69,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               JD Matching
             </Link>
           </div>
+        </div> */}
 
-        </div>
-      </nav>
         {children}
       </body>
     </html>
