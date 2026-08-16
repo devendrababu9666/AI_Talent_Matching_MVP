@@ -1,8 +1,12 @@
 def validate_jd(state):
+    print("validating",state)
     errors = []
 
-    if not state["extracted_skills"]:
-        errors.append("No skills could be extracted from the JD.")
+    if not state["primary_skills"]:
+        errors.append("No primary skills could be extracted from the JD for UI display.")
+
+    if not state["matching_skills"]:
+        errors.append("No matching skills could be extracted from the JD for detailed comparison.")
 
     if not state["role"]:
         errors.append("Role could not be identified.")

@@ -1,7 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import Link from "next/link"
+import { useEffect, useMemo, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -23,6 +22,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
+type CandidateStatus = "Available" | "In Pipeline" | "Deployed"
+
 type Candidate = {
   sapid: string
   name: string
@@ -30,70 +31,117 @@ type Candidate = {
   skills: string[]
   experience: number
   location: string
-  status: "Available" | "In Pipeline" | "Deployed"
+  status: CandidateStatus
 }
 
-// const candidates: Candidate[] = [
-//   {
-//     sapid: "100001",
-//     name: "Mallikarjuna Patil",
-//     role: "AI Architect",
-//     skills: ["RAG", "Azure OpenAI", "Python"],
-//     experience: 13,
-//     location: "Bangalore",
-//     status: "Available",
-//   },
-//   {
-//     sapid: "100002",
-//     name: "Devendra",
-//     role: "AI Architect",
-//     skills: ["Agents", "LangGraph"],
-//     experience: 10,
-//     location: "Hyderabad",
-//     status: "Available",
-//   },
-//   {
-//     sapid: "100003",
-//     name: "Prachi Bhatt",
-//     role: "AI Engineer",
-//     skills: ["Python", "FastAPI", "RAG"],
-//     experience: 9,
-//     location: "Noida",
-//     status: "In Pipeline",
-//   },
-// ]
+type ApiCandidate = {
+  id: string
+  sap_id: string
+  name: string
+  role: string | null
+  experience_years: number | null
+  location: string | null
+  status: string | null
+  summary?: string | null
+  skills: string[]
+}
 
-
-const candidates: Candidate[] = Array.from({ length: 15 }, (_, i) => ({
-  sapid: `1000${i + 1}`,
-  name: `Candidate ${i + 1}`,
-  role: i % 2 === 0 ? "AI Architect" : "AI Engineer",
-  skills: ["Python", "RAG", "Azure"],
-  experience: 8 + (i % 5),
-  location: ["Bangalore", "Hyderabad", "Noida", "Chennai"][i % 4],
-  status: ["Available" ,"In Pipeline","Deployed"] [i % 3] as "Available" | "In Pipeline" | "Deployed",
-}))
-
+type CandidatesApiResponse = {
+  count: number
+  candidates: ApiCandidate[]
+}
 
 export default function TalentSearchPage() {
+  const [candidates, setCandidates] = useState<Candidate[]>([])
   const [search, setSearch] = useState("")
   const [status, setStatus] = useState("All")
   const [role, setRole] = useState("All")
   const [location, setLocation] = useState("All")
   const [experience, setExperience] = useState("All")
   const [currentPage, setCurrentPage] = useState(1)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState("")
+
   const pageSize = 5
 
-  
-  
+  useEffect(() => {
+    fetchCandidates()
+  }, [])
+
+  async function fetchCandidates() {
+    setIsLoading(true)
+    setError("")
+
+    try {
+      const response = await fetch("http://localhost:8000/api/candidates")
+
+      if (!response.ok) {
+        throw new Error("Failed to load candidates.")
+      }
+
+      const data: CandidatesApiResponse = await response.json()
+
+      const mappedCandidates: Candidate[] = data.candidates.map((candidate) => ({
+        sapid: candidate.sap_id,
+        name: candidate.name,
+        role: candidate.role || "Unknown",
+        skills: candidate.skills || [],
+        experience: candidate.experience_years || 0,
+        location: candidate.location || "Unknown",
+        status: normalizeStatus(candidate.status),
+      }))
+
+      setCandidates(mappedCandidates)
+      setCurrentPage(1)
+    } catch (loadError) {
+      console.error(loadError)
+      setError("Unable to load candidates from backend.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  function handleViewSummary(sapid: string) {
+    window.location.href = `/summary/${sapid}`
+  }
+
+  function handleSearch() {
+    setCurrentPage(1)
+  }
+
+  const roleOptions = useMemo(() => {
+    const values = candidates
+      .map((candidate) => candidate.role)
+      .filter(Boolean)
+
+    return ["All", ...Array.from(new Set(values))]
+  }, [candidates])
+
+  const locationOptions = useMemo(() => {
+    const values = candidates
+      .map((candidate) => candidate.location)
+      .filter(Boolean)
+
+    return ["All", ...Array.from(new Set(values))]
+  }, [candidates])
 
   const filteredCandidates = useMemo(() => {
     return candidates.filter((candidate) => {
+      const searchableText = [
+        candidate.sapid,
+        candidate.name,
+        candidate.skills.join(" "),
+        candidate.location,
+        candidate.role,
+        candidate.status,
+        `${candidate.experience} years`,
+      ]
+        .join(" ")
+        .toLowerCase()
+
       const searchMatch =
         search.trim() === "" ||
-        `${candidate.name} ${candidate.skills.join(" ")} ${candidate.location} ${candidate.role}`
-          .toLowerCase()
-          .includes(search.toLowerCase())
+        searchableText.includes(search.trim().toLowerCase())
 
       const statusMatch =
         status === "All" || candidate.status === status
@@ -106,6 +154,9 @@ export default function TalentSearchPage() {
 
       const experienceMatch =
         experience === "All" ||
+        (experience === "1+" && candidate.experience >= 1) ||
+        (experience === "3+" && candidate.experience >= 3) ||
+        (experience === "5+" && candidate.experience >= 5) ||
         (experience === "8+" && candidate.experience >= 8) ||
         (experience === "10+" && candidate.experience >= 10) ||
         (experience === "12+" && candidate.experience >= 12)
@@ -118,9 +169,9 @@ export default function TalentSearchPage() {
         experienceMatch
       )
     })
-  }, [search, status, role, location, experience])
+  }, [candidates, search, status, role, location, experience])
 
-  const totalPages = Math.ceil(filteredCandidates.length / pageSize)
+  const totalPages = Math.max(1, Math.ceil(filteredCandidates.length / pageSize))
 
   const paginatedCandidates = filteredCandidates.slice(
     (currentPage - 1) * pageSize,
@@ -132,85 +183,106 @@ export default function TalentSearchPage() {
       <div className="mx-auto max-w-7xl">
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="pb-4">
-            <CardTitle className="text-2xl font-semibold text-slate-900">
-              Search Talent Pool
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-2xl font-semibold text-slate-900">
+                Search Talent Pool
+              </CardTitle>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={fetchCandidates}
+                disabled={isLoading}
+              >
+                {isLoading ? "Refreshing..." : "Refresh"}
+              </Button>
+            </div>
           </CardHeader>
 
           <CardContent className="space-y-6">
+            {error ? (
+              <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                {error}
+              </div>
+            ) : null}
 
-            {/* Search */}
             <div className="flex gap-4">
               <Input
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search skills..."
+                onChange={(event) => {
+                  setSearch(event.target.value)
+                  setCurrentPage(1)
+                }}
+                placeholder="Search name, SAP ID, skills, role, location..."
                 className="h-14 flex-1 border-slate-300 bg-gray-100 px-5 text-sm"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    console.log("Search:", search)
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    handleSearch()
                   }
                 }}
               />
 
               <Button
-                onClick={() => console.log("Search:", search)}
+                type="button"
+                onClick={handleSearch}
                 className="h-14 w-32 bg-[#0F5FDC] font-medium hover:bg-[#0A6DB4]"
               >
                 Search
               </Button>
             </div>
 
-            {/* Filters */}
             <div className="grid grid-cols-4 gap-6">
-                <FilterSelect
-                    label="Status"
-                    value={status}
-                    onChange={(value) => {
-                          setStatus(value)
-                          setCurrentPage(1)
-                        }}
-                    options={["Available", "In Pipeline", "Deployed", "All"]}
-                />
+              <FilterSelect
+                label="Status"
+                value={status}
+                onChange={(value) => {
+                  setStatus(value)
+                  setCurrentPage(1)
+                }}
+                options={["All", "Available", "In Pipeline", "Deployed"]}
+              />
 
-                <FilterSelect
-                    label="Role"
-                    value={role}
-                    onChange={(value) => {
-                          setRole(value)
-                          setCurrentPage(1)
-                        }}
-                    options={["AI Architect", "AI Engineer", "Developer", "All"]}
-                />
+              <FilterSelect
+                label="Role"
+                value={role}
+                onChange={(value) => {
+                  setRole(value)
+                  setCurrentPage(1)
+                }}
+                options={roleOptions}
+              />
 
-                <FilterSelect
-                    label="Location"
-                    value={location}
-                    onChange={(value) => {
-                          setLocation(value)
-                          setCurrentPage(1)
-                        }}
-                    options={["Bangalore", "Hyderabad", "Chennai", "All"]}
-                />
+              <FilterSelect
+                label="Location"
+                value={location}
+                onChange={(value) => {
+                  setLocation(value)
+                  setCurrentPage(1)
+                }}
+                options={locationOptions}
+              />
 
-                <FilterSelect
-                    label="Experience"
-                    value={experience}
-                    onChange={(value) => {
-                          setExperience(value)
-                          setCurrentPage(1)
-                        }}
-                    options={["8+", "10+", "12+", "All"]}
-                />
-                </div>
+              <FilterSelect
+                label="Experience"
+                value={experience}
+                onChange={(value) => {
+                  setExperience(value)
+                  setCurrentPage(1)
+                }}
+                options={["All", "1+", "3+", "5+", "8+", "10+", "12+"]}
+              />
+            </div>
 
-            {/* Results */}
             <div className="overflow-hidden rounded-md border border-slate-200">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-blue-50 hover:bg-blue-50">
                     <TableHead className="font-semibold text-[#0F5FDC]">
                       Candidate
+                    </TableHead>
+
+                    <TableHead className="font-semibold text-[#0F5FDC]">
+                      SAP ID
                     </TableHead>
 
                     <TableHead className="font-semibold text-[#0F5FDC]">
@@ -236,22 +308,64 @@ export default function TalentSearchPage() {
                 </TableHeader>
 
                 <TableBody>
-                  {paginatedCandidates.length > 0 ? (
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={7}
+                        className="h-24 text-center text-slate-500"
+                      >
+                        Loading candidates...
+                      </TableCell>
+                    </TableRow>
+                  ) : paginatedCandidates.length > 0 ? (
                     paginatedCandidates.map((candidate) => (
                       <TableRow
                         key={candidate.sapid}
                         className="hover:bg-slate-50"
                       >
                         <TableCell className="font-medium text-slate-900">
-                          {candidate.name}
+                          <div>
+                            <p>{candidate.name}</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {candidate.role}
+                            </p>
+                          </div>
                         </TableCell>
 
                         <TableCell className="text-slate-600">
-                          {candidate.skills.join(", ")}
+                          {candidate.sapid}
                         </TableCell>
 
                         <TableCell className="text-slate-600">
-                          {candidate.experience} years
+                          <div className="flex max-w-md flex-wrap gap-2">
+                            {candidate.skills.length > 0 ? (
+                              candidate.skills.slice(0, 5).map((skill) => (
+                                <Badge
+                                  key={skill}
+                                  variant="outline"
+                                  className="border-blue-200 bg-blue-50 text-[#0F5FDC]"
+                                >
+                                  {skill}
+                                </Badge>
+                              ))
+                            ) : (
+                              <span className="text-xs text-slate-500">
+                                No skills
+                              </span>
+                            )}
+
+                            {candidate.skills.length > 5 ? (
+                              <Badge variant="outline">
+                                +{candidate.skills.length - 5}
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </TableCell>
+
+                        <TableCell className="text-slate-600">
+                          {candidate.experience > 0
+                            ? `${candidate.experience} years`
+                            : "Unknown"}
                         </TableCell>
 
                         <TableCell className="text-slate-600">
@@ -259,37 +373,17 @@ export default function TalentSearchPage() {
                         </TableCell>
 
                         <TableCell>
-                          <span
-                            className={`inline-flex items-center gap-2 text-sm font-medium ${
-                              candidate.status === "Available"
-                                ? "text-emerald-600"
-                                : candidate.status === "Deployed"
-                                  ? "text-blue-500"
-                                  : "text-amber-500"
-                            }`}
-                          >
-                            <span
-                              className={`h-2 w-2 rounded-full ${
-                                candidate.status === "Available"
-                                  ? "bg-emerald-500"
-                                : candidate.status === "Deployed"
-                                    ? "bg-blue-500"
-                                    : "bg-amber-500"
-                              }`}
-                            />
-
-                            {candidate.status}
-                          </span>
+                          <StatusText status={candidate.status} />
                         </TableCell>
 
                         <TableCell>
                           <Button
+                            type="button"
                             variant="link"
+                            onClick={() => handleViewSummary(candidate.sapid)}
                             className="h-auto p-0 font-medium text-slate-800 hover:text-[#0F5FDC]"
                           >
-                            <Link href={`/summary/${candidate.sapid}`}>
-                              View Summary
-                            </Link>
+                            View Summary
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -297,7 +391,7 @@ export default function TalentSearchPage() {
                   ) : (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={7}
                         className="h-24 text-center text-slate-500"
                       >
                         No candidates found.
@@ -308,7 +402,6 @@ export default function TalentSearchPage() {
               </Table>
             </div>
 
-            {/* Pagination */}
             <div className="flex items-center justify-between">
               <Badge className="rounded-md bg-[#0F5FDC] px-5 py-2 text-sm font-medium hover:bg-[#0F5FDC]">
                 {filteredCandidates.length}{" "}
@@ -320,7 +413,9 @@ export default function TalentSearchPage() {
                   variant="outline"
                   size="sm"
                   disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((page) => page - 1)}
+                  onClick={() =>
+                    setCurrentPage((page) => Math.max(1, page - 1))
+                  }
                 >
                   Previous
                 </Button>
@@ -333,13 +428,14 @@ export default function TalentSearchPage() {
                   variant="outline"
                   size="sm"
                   disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage((page) => page + 1)}
+                  onClick={() =>
+                    setCurrentPage((page) => Math.min(totalPages, page + 1))
+                  }
                 >
                   Next
                 </Button>
               </div>
             </div>
-
           </CardContent>
         </Card>
       </div>
@@ -379,4 +475,42 @@ function FilterSelect({
       </Select>
     </div>
   )
+}
+
+function StatusText({ status }: { status: CandidateStatus }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-2 text-sm font-medium ${
+        status === "Available"
+          ? "text-emerald-600"
+          : status === "Deployed"
+            ? "text-blue-500"
+            : "text-amber-500"
+      }`}
+    >
+      <span
+        className={`h-2 w-2 rounded-full ${
+          status === "Available"
+            ? "bg-emerald-500"
+            : status === "Deployed"
+              ? "bg-blue-500"
+              : "bg-amber-500"
+        }`}
+      />
+
+      {status}
+    </span>
+  )
+}
+
+function normalizeStatus(status: string | null): CandidateStatus {
+  if (status === "In Pipeline") {
+    return "In Pipeline"
+  }
+
+  if (status === "Deployed") {
+    return "Deployed"
+  }
+
+  return "Available"
 }

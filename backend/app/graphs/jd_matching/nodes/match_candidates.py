@@ -1,11 +1,11 @@
 from app.services.llm_service import model
 from app.graphs.jd_matching.nodes.prompts import compare_skills
 
-
 def match_candidates(state):
+    print("matching", state)
     matches = []
 
-    jd_skills = state["extracted_skills"]
+    jd_skills = state["matching_skills"]
 
     for candidate in state["candidates"]:
 
@@ -19,6 +19,7 @@ def match_candidates(state):
         result = model.generate_json(prompt)
 
         assessment = result.get("assessment_insights", {})
+        summary = result.get("matching_summary", {})
 
         matches.append({
             "sap_id": candidate["sap_id"],
@@ -30,12 +31,14 @@ def match_candidates(state):
                 assessment.get("overall_fit_score", 0)
             ),
 
-            "reasoning": assessment.get(
-                "recommendation",
-                ""
+            "match_percentage": summary.get(
+                "match_percentage", 0
             ),
 
-            # Keep detailed comparison available
+            "reasoning": assessment.get(
+                "recommendation", ""
+            ),
+
             "skill_analysis": result,
         })
 
@@ -43,35 +46,3 @@ def match_candidates(state):
         "matches": matches,
         "status": "MATCHING_COMPLETED",
     }
-
-# from app.services.llm_service import model
-
-# def match_candidates(state):
-#     matches = []
-
-#     for candidate in state["candidates"]:
-#         result = model.generate_json(prompt=f"""
-#             You are a job matching expert. Given the following job description and candidate information, evaluate how well the candidate matches the job description. Provide a match score between 0 and 100, and provide reasoning for your score.
-#             jd={
-#                 "skills": state["extracted_skills"],
-#                 "experience_min": state["experience_min"],
-#                 "experience_max": state["experience_max"],
-#                 "role": state["role"],
-#                 "location": state["location"],
-#             },
-#             candidate=candidate,"""
-#         )
-
-#         matches.append({
-#             "sap_id": candidate["sap_id"],
-#             "name": candidate["name"],
-#             "skills": candidate.get("skills", []),
-#             "status": candidate.get("status"),
-#             "match_score": result["match_score"],
-#             "reasoning": result["reasoning"],
-#         })
-
-#     return {
-#         "matches": matches,
-#         "status": "MATCHING_COMPLETED",
-#     }

@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -14,16 +15,23 @@ import {
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { Textarea } from "@/components/ui/textarea"
-import { X } from "lucide-react"
 
+type CandidateStatus = "Available" | "In Pipeline" | "Deployed"
+
+// type RankedCandidate = {
+//   sapid: string
+//   name: string
+//   skills: string[]
+//   matchScore: number
+//   status: CandidateStatus
+// }
 type RankedCandidate = {
   sapid: string
   name: string
-  skills: string[]
+  skills: JDMatchingApiSkill[]
   matchScore: number
-  status: "Available" | "In Pipeline" | "Deployed"
+  status: CandidateStatus
 }
-
 type ExtractedCriteria = {
   skills: string[]
   experience: string
@@ -31,254 +39,286 @@ type ExtractedCriteria = {
   location: string
 }
 
-const extractedCriteria: ExtractedCriteria = {
-  skills: ["RAG", "LangGraph", "Azure OpenAI", "Python"],
-  experience: "8–12 years",
-  role: "AI Solution Lead",
-  location: "Bangalore preferred",
+type JDMatchingApiSkill = {
+  skill: string
+  justification: string
 }
 
-const rankedCandidates: RankedCandidate[] = [
-  {
-    sapid: "100001",
-    name: "Mallikarjuna Patil",
-    skills: ["RAG", "Azure OpenAI", "Python"],
-    matchScore: 92,
-    status: "Available",
-  },
-  {
-    sapid: "100004",
-    name: "Siddesh",
-    skills: ["FastAPI", "RAG", "Agents"],
-    matchScore: 85,
-    status: "Deployed",
-  },
-  {
-    sapid: "100005",
-    name: "Rihan Y",
-    skills: ["GenAI", "LangGraph", "Python"],
-    matchScore: 78,
-    status: "In Pipeline",
-  },
-  {
-    sapid: "100006",
-    name: "Prachi Bhatt",
-    skills: ["GenAI", "FastAPI", "Python"],
-    matchScore: 68,
-    status: "In Pipeline",
+type JDMatchingApiMatch = {
+  candidate_id?: string
+  sap_id: string
+  name: string
+  role?: string
+  experience_years?: number
+  location?: string
+  status: CandidateStatus | string
+  // skills: string[]
+  skills: JDMatchingApiSkill[]
+  match_score: number
+  recommendation?: string
+}
+
+type JDMatchingApiResponse = {
+  status: string
+  jd: {
+    primary_skills: string[]
+    matching_skills: JDMatchingApiSkill[]
+    role: string | null
+    location: string | null
+    experience_min: number | null
+    experience_max: number | null
   }
-]
+  matches: JDMatchingApiMatch[]
+  business_decision: {
+    supported?: boolean
+    recommendation?: string
+    total_matches?: number
+  } | null
+  errors: string[]
+}
 
 export default function MatchJDPage() {
-//   const [uploadedFile, setUploadedFile] = useState<string | null>(null)
-    const [inputMode, setInputMode] = useState<"upload" | "paste">("upload")
-    const [uploadedFile, setUploadedFile] = useState<string | null>(null)
-    const [jdText, setJdText] = useState("")
+  const [inputMode, setInputMode] = useState<"upload" | "paste">("upload")
+  const [uploadedFile, setUploadedFile] = useState<string | null>(null)
+  const [jdText, setJdText] = useState("")
 
-    const handleFileUpload = (
-        event: React.ChangeEvent<HTMLInputElement>
-    ) => {
-        const file = event.target.files?.[0]
+  const [extractedCriteria, setExtractedCriteria] =
+    useState<ExtractedCriteria>({
+      skills: [],
+      experience: "Not extracted yet",
+      role: "Not extracted yet",
+      location: "Not extracted yet",
+    })
 
-        if (file) {
-        setUploadedFile(file.name)
+  const [rankedCandidates, setRankedCandidates] = useState<RankedCandidate[]>([])
+  const [businessRecommendation, setBusinessRecommendation] = useState("")
+  const [isMatching, setIsMatching] = useState(false)
+  const [matchError, setMatchError] = useState("")
 
-        // const response = await fetch("/api/match-jd", ...)
-        }
+  const handleFileUpload = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0]
+
+    if (file) {
+      setUploadedFile(file.name)
     }
-    const handleRemoveFile = () => {
-        setUploadedFile(null)
+  }
 
-    // Reset the actual file input
+  const handleRemoveFile = () => {
+    setUploadedFile(null)
+
     const input = document.getElementById("jd-file") as HTMLInputElement | null
 
     if (input) {
-        input.value = ""
+      input.value = ""
     }
+  }
+
+  const handleAnalyzeJD = async () => {
+    if (!jdText.trim()) {
+      setMatchError("Please paste a job description first.")
+      return
     }
+
+    setIsMatching(true)
+    setMatchError("")
+    setRankedCandidates([])
+    setBusinessRecommendation("")
+
+    try {
+      const response = await fetch("http://localhost:8000/api/jd-matching/match", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          jd_text: jdText,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorResponse = await response.json().catch(() => null)
+
+        throw new Error(
+          errorResponse?.detail || "JD matching failed."
+        )
+      }
+
+      const data: JDMatchingApiResponse = await response.json()
+
+      setExtractedCriteria({
+        // skills: data.jd.skills.map((item) => item.skill),
+        skills: data.jd.primary_skills ?? [],
+        experience: getExperienceText(
+          data.jd.experience_min,
+          data.jd.experience_max
+        ),
+        role: data.jd.role || "Not specified",
+        location: data.jd.location || "Not specified",
+      })
+
+      // const mappedCandidates: RankedCandidate[] = data.matches.map((match) => ({
+      //   sapid: match.sap_id,
+      //   name: match.name,
+      //   skills: match.skills || [],
+      //   matchScore: match.match_score || 0,
+      //   status: normalizeStatus(match.status),
+      // }))
+      const mappedCandidates: RankedCandidate[] = data.matches.map((match) => ({
+          sapid: match.sap_id,
+          name: match.name,
+          skills: match.skills || [],
+          matchScore: match.match_score || 0,
+          status: normalizeStatus(match.status),
+      }))
+
+      setRankedCandidates(mappedCandidates)
+      setBusinessRecommendation(data.business_decision?.recommendation || "")
+
+      if (data.errors?.length > 0 && mappedCandidates.length === 0) {
+        setMatchError(data.errors.join(" "))
+      }
+    } catch (error) {
+      console.error(error)
+
+      if (error instanceof Error) {
+        setMatchError(error.message)
+      } else {
+        setMatchError("Something went wrong while matching JD.")
+      }
+    } finally {
+      setIsMatching(false)
+    }
+  }
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8">
       <div className="mx-auto max-w-7xl space-y-6">
-
-        {/* Page heading */}
-        {/* <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            JD Matching
-          </h1>
-
-          <p className="mt-1 text-sm text-slate-500">
-            Upload a job description to identify and rank relevant talent.
-          </p>
-        </div> */}
-
         <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-
-          {/* LEFT — JD Upload / Criteria */}
           <Card className="border-slate-200 shadow-sm">
-            {/* <CardHeader>
-              <CardTitle className="text-lg">
-                Upload / Paste JD
-              </CardTitle>
-            </CardHeader> */}
-
             <CardContent className="space-y-6">
-
-              {/* Upload */}
-              {/* <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-center">
-                <Input
-                  type="file"
-                  accept=".pdf,.doc,.docx,.txt"
-                  onChange={handleFileUpload}
-                  className="cursor-pointer bg-white"
-                />
-
-                {uploadedFile && (
-                  <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-                    <span className="font-medium">
-                      {uploadedFile}
-                    </span>
-                    <br />
-                    JD uploaded successfully
-                  </div>
-                )}
-              </div> */}
-              {/* JD Input */}
-                <div className="space-y-4">
-
-                {/* Input mode */}
+              <div className="space-y-4">
                 <div className="grid grid-cols-2 rounded-lg bg-slate-100 p-1">
-                    <button
+                  <button
                     type="button"
                     onClick={() => setInputMode("upload")}
                     className={`rounded-md px-3 py-2 text-sm font-medium transition ${
-                        inputMode === "upload"
+                      inputMode === "upload"
                         ? "bg-white text-[#0F5FDC] shadow-sm"
                         : "text-slate-500 hover:text-slate-700"
                     }`}
-                    >
+                  >
                     Upload JD
-                    </button>
+                  </button>
 
-                    <button
-                        type="button"
-                        onClick={() => setInputMode("paste")}
-                        className={`rounded-md px-3 py-2 text-sm font-medium transition ${
-                            inputMode === "paste"
-                            ? "bg-white text-[#0F5FDC] shadow-sm"
-                            : "text-slate-500 hover:text-slate-700"
-                        }`}
-                    >
+                  <button
+                    type="button"
+                    onClick={() => setInputMode("paste")}
+                    className={`rounded-md px-3 py-2 text-sm font-medium transition ${
+                      inputMode === "paste"
+                        ? "bg-white text-[#0F5FDC] shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
                     Paste JD
-                    </button>
+                  </button>
                 </div>
 
-                {/* Upload mode */}
                 {inputMode === "upload" && (
-                    <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+                  <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
                     <p className="text-sm font-medium text-slate-700">
-                        Upload job description
+                      Upload job description
                     </p>
 
                     <p className="mt-1 text-xs text-slate-500">
-                        PDF, DOC, DOCX or TXT
+                      PDF, DOC, DOCX or TXT
                     </p>
 
                     <div className="mt-4">
-                        {/* <Input
+                      <Input
+                        id="jd-file"
                         type="file"
                         accept=".pdf,.doc,.docx,.txt"
                         onChange={handleFileUpload}
                         className="cursor-pointer bg-white"
-                        /> */}
-                        <Input
-                            id="jd-file"
-                            type="file"
-                            accept=".pdf,.doc,.docx,.txt"
-                            onChange={handleFileUpload}
-                            className="cursor-pointer bg-white"
-                        />
+                      />
                     </div>
 
-                    {/* {uploadedFile && (
-                        <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-left text-sm text-blue-700">
-                        <span className="font-medium">
-                            {uploadedFile}
-                        </span>
-
-                        <p className="mt-0.5 text-xs">
-                            JD uploaded successfully
-                        </p>
-                        </div>
-                    )} */}
                     {uploadedFile && (
-                        <div className="mt-3 flex items-center justify-between rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-left">
-                            <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-blue-700">
-                                {uploadedFile}
-                            </p>
-                            <p className="text-xs text-blue-600">
-                                JD uploaded successfully
-                            </p>
-                            </div>
+                      <div className="mt-3 flex items-center justify-between rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-left">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-blue-700">
+                            {uploadedFile}
+                          </p>
 
-                            <button
-                            type="button"
-                            onClick={handleRemoveFile}
-                            className="ml-3 rounded-md p-1 text-slate-500 hover:bg-white hover:text-slate-700"
-                            aria-label="Remove uploaded file"
-                            >
-                            <X className="h-4 w-4" />
-                            </button>
+                          <p className="text-xs text-blue-600">
+                            JD uploaded successfully
+                          </p>
                         </div>
-                        )}
-                    </div>
+
+                        <button
+                          type="button"
+                          onClick={handleRemoveFile}
+                          className="ml-3 rounded-md p-1 text-slate-500 hover:bg-white hover:text-slate-700"
+                          aria-label="Remove uploaded file"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )}
 
-                {/* Paste mode */}
                 {inputMode === "paste" && (
-                    <div className="space-y-3">
+                  <div className="space-y-3">
                     <Textarea
-                        value={jdText}
-                        onChange={(e) => setJdText(e.target.value)}
-                        placeholder="Paste the job description here..."
-                        className="min-h-[100px] resize-none border-slate-300 bg-white"
+                      value={jdText}
+                      onChange={(event) => setJdText(event.target.value)}
+                      placeholder="Paste the job description here..."
+                      className="min-h-[100px] resize-none border-slate-300 bg-white"
                     />
 
                     <Button
-                        className="w-full bg-[#0F5FDC] hover:bg-[#0A6DB4]"
-                        disabled={!jdText.trim()}
-                        onClick={() => {
-                        console.log("JD text submitted:", jdText)
-                        // Later: call FastAPI
-                        }}
+                      className="w-full bg-[#0F5FDC] hover:bg-[#0A6DB4]"
+                      disabled={!jdText.trim() || isMatching}
+                      onClick={handleAnalyzeJD}
                     >
-                        Analyze JD
+                      {isMatching ? "Matching..." : "Analyze JD"}
                     </Button>
-                    </div>
+                  </div>
                 )}
+              </div>
 
+              {matchError ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                  {matchError}
                 </div>
+              ) : null}
 
-              {/* Extracted criteria */}
               <div>
                 <h3 className="mb-3 text-sm font-semibold text-slate-900">
                   Extracted criteria
                 </h3>
 
                 <div className="flex flex-wrap gap-2">
-                  {extractedCriteria.skills.map((skill) => (
-                    <Badge
-                      key={skill}
-                      className="rounded-md bg-[#0F5FDC] px-3 py-1.5 text-xs hover:bg-[#0F5FDC]"
-                    >
-                      {skill}
-                    </Badge>
-                  ))}
+                  {extractedCriteria.skills.length > 0 ? (
+                    extractedCriteria.skills.map((skill) => (
+                      <Badge
+                        key={skill}
+                        className="rounded-md bg-[#0F5FDC] px-3 py-1.5 text-xs hover:bg-[#0F5FDC]"
+                      >
+                        {skill}
+                      </Badge>
+                    ))
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      Analyze a JD to extract skills.
+                    </p>
+                  )}
                 </div>
               </div>
 
-              {/* Criteria details */}
               <div className="space-y-3 border-t border-slate-200 pt-4">
                 <CriteriaRow
                   label="Experience"
@@ -295,11 +335,9 @@ export default function MatchJDPage() {
                   value={extractedCriteria.location}
                 />
               </div>
-
             </CardContent>
           </Card>
 
-          {/* RIGHT — Ranked matches */}
           <Card className="border-slate-200 shadow-sm">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -307,32 +345,33 @@ export default function MatchJDPage() {
                   <CardTitle className="text-lg">
                     Ranked matches
                   </CardTitle>
-
-                  {/* <p className="mt-1 text-sm text-slate-500">
-                    Candidates ranked based on JD requirements.
-                  </p> */}
                 </div>
 
                 <Badge
                   variant="outline"
                   className="border-blue-200 bg-blue-50 text-[#0F5FDC]"
                 >
-                  {rankedCandidates.length} matches
+                  {rankedCandidates.length}{" "}
+                  {rankedCandidates.length === 1 ? "match" : "matches"}
                 </Badge>
               </div>
             </CardHeader>
 
             <CardContent className="space-y-3">
+              {rankedCandidates.length > 0 ? (
+                rankedCandidates.map((candidate, index) => (
+                  <CandidateMatch
+                    key={candidate.sapid}
+                    candidate={candidate}
+                    rank={index + 1}
+                  />
+                ))
+              ) : (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                  Paste a JD and click Analyze JD to view ranked matches.
+                </div>
+              )}
 
-              {rankedCandidates.map((candidate, index) => (
-                <CandidateMatch
-                  key={candidate.sapid}
-                  candidate={candidate}
-                  rank={index + 1}
-                />
-              ))}
-
-              {/* Business decision */}
               <div className="mt-6 grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -340,7 +379,7 @@ export default function MatchJDPage() {
                   </p>
 
                   <p className="mt-1 text-sm font-medium text-slate-800">
-                    Supported
+                    {rankedCandidates.length > 0 ? "Supported" : "Pending"}
                   </p>
                 </div>
 
@@ -350,15 +389,13 @@ export default function MatchJDPage() {
                   </p>
 
                   <p className="mt-1 text-sm text-slate-600">
-                    Prioritize available talent; retain in-pipeline
-                    profiles as clearly flagged.
+                    {businessRecommendation ||
+                      "Run JD matching to generate recommendation."}
                   </p>
                 </div>
               </div>
-
             </CardContent>
           </Card>
-
         </div>
       </div>
     </main>
@@ -395,24 +432,21 @@ function CandidateMatch({
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 transition-shadow hover:shadow-sm">
       <div className="flex items-center gap-4">
-
-        {/* Rank */}
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-sm font-semibold text-[#0F5FDC]">
           {rank}
         </div>
 
-        {/* Candidate */}
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-slate-900">
             {candidate.name}
           </p>
 
           <p className="mt-1 truncate text-xs text-slate-500">
-            {candidate.skills.join(" | ")}
+            {/* {candidate.skills.join(" | ")} */}
+            {candidate.skills.map((skill) => skill.skill).join(" | ")}
           </p>
         </div>
 
-        {/* Score */}
         <div className="w-20 text-center">
           <p className="text-2xl font-bold text-[#0F5FDC]">
             {candidate.matchScore}%
@@ -424,12 +458,10 @@ function CandidateMatch({
           />
         </div>
 
-        {/* Status */}
         <div className="hidden w-28 sm:block">
           <StatusBadge status={candidate.status} />
         </div>
 
-        {/* Summary */}
         <Button
           variant="link"
           className="shrink-0 font-medium text-slate-700 hover:text-[#0F5FDC]"
@@ -438,7 +470,6 @@ function CandidateMatch({
             View Summary
           </Link>
         </Button>
-
       </div>
     </div>
   )
@@ -467,4 +498,35 @@ function StatusBadge({
       {status}
     </Badge>
   )
+}
+
+function normalizeStatus(status: string | null | undefined): CandidateStatus {
+  if (status === "In Pipeline") {
+    return "In Pipeline"
+  }
+
+  if (status === "Deployed") {
+    return "Deployed"
+  }
+
+  return "Available"
+}
+
+function getExperienceText(
+  experienceMin: number | null,
+  experienceMax: number | null
+) {
+  if (experienceMin !== null && experienceMax !== null) {
+    return `${experienceMin}-${experienceMax} years`
+  }
+
+  if (experienceMin !== null) {
+    return `${experienceMin}+ years`
+  }
+
+  if (experienceMax !== null) {
+    return `Up to ${experienceMax} years`
+  }
+
+  return "Not specified"
 }
