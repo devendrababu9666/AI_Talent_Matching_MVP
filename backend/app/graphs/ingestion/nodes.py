@@ -5,6 +5,7 @@ from app.services.llm_service import model
 
 
 def extract_candidate_metadata(state: dict[str, Any]) -> dict[str, Any]:
+    print("Extracting candidate metadata from resume text...")
     raw_text = state.get("raw_text", "")
     original_filename = state.get("original_filename", "")
 
@@ -12,9 +13,10 @@ def extract_candidate_metadata(state: dict[str, Any]) -> dict[str, Any]:
         raw_text=raw_text,
         original_filename=original_filename,
     )
-
+    print("Candidate extraction prompt built successfully.")
     try:
         extracted_candidate = model.generate_json(prompt)
+        print("Candidate metadata extracted successfully:", extracted_candidate)
 
         return {
             "extracted_candidate": normalize_candidate(extracted_candidate),
@@ -65,6 +67,17 @@ def validate_candidate_metadata(state: dict[str, Any]) -> dict[str, Any]:
         errors.append("Skills must be returned as a list.")
     elif len(skills) == 0:
         errors.append("No skills could be extracted.")
+    else:
+        for index, skill_item in enumerate(skills):
+            if not isinstance(skill_item, dict):
+                errors.append(f"Skill item at index {index} must be an object.")
+                continue
+
+            if not skill_item.get("skill"):
+                errors.append(f"Skill item at index {index} is missing skill name.")
+
+            if not skill_item.get("justification"):
+                errors.append(f"Skill item at index {index} is missing justification.")
 
     if errors:
         return {
@@ -99,7 +112,13 @@ Use exactly this JSON structure:
   "role": "string",
   "experience_years": null,
   "location": "string",
-  "skills": ["string"],
+  "skills": [
+    {{
+      "skill": "string",
+      "justification": "string",
+      "experience_years": null
+    }}
+  ],
   "summary": "string"
 }}
 
@@ -138,11 +157,29 @@ Extraction rules:
 - Location is optional. Do not invent location.
 
 6. skills
-- Extract important technical and professional skills.
-- Return a clean list of strings.
-- Normalize duplicates.
-- Do not include generic filler words.
-- Prefer specific technologies, tools, frameworks, cloud services, AI skills, and programming languages.
+- Extract technical, domain, platform, framework, tool, cloud, AI, programming, and relevant professional skills.
+- Return skills as a list of objects.
+- Each skill object must have:
+  - skill
+  - justification
+  - experience_years
+- The structure must be conceptually identical to JD skills:
+  {{
+    "skill": "...",
+    "justification": "..."
+  }}
+- Normalize obvious variations:
+  - React.js -> React
+  - Python Programming -> Python
+  - Azure OpenAI Service -> Azure OpenAI
+- Do not duplicate skills.
+- Do not hallucinate skills that are not supported by the resume.
+- Preserve meaningful technology distinctions.
+- Do not convert LangGraph into generic Python.
+- If skill-specific experience is available, preserve it in experience_years.
+- If skill-specific experience is not clear, return null for that skill.
+- Extract only skills useful for talent matching.
+- Each justification must be short and evidence-based.
 
 7. summary
 - Write a short 2-3 sentence professional candidate summary.
@@ -181,19 +218,7 @@ def normalize_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(experience_years, int):
         experience_years = None
 
-    if not isinstance(skills, list):
-        skills = []
-
-    cleaned_skills = []
-
-    for skill in skills:
-        if isinstance(skill, str):
-            cleaned_skill = skill.strip()
-
-            if cleaned_skill:
-                cleaned_skills.append(cleaned_skill)
-
-    cleaned_skills = sorted(set(cleaned_skills))
+    normalized_skills = normalize_skill_records(skills)
 
     return {
         "sap_id": sap_id,
@@ -201,9 +226,83 @@ def normalize_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
         "role": str(role).strip(),
         "experience_years": experience_years,
         "location": str(location).strip(),
-        "skills": cleaned_skills,
+        "skills": normalized_skills,
         "summary": str(summary).strip(),
     }
+
+
+def normalize_skill_records(skills: Any) -> list[dict[str, Any]]:
+    if not isinstance(skills, list):
+        return []
+
+    normalized = []
+
+    for item in skills:
+        if isinstance(item, str):
+            skill_name = item.strip()
+
+            if not skill_name:
+                continue
+
+            normalized.append(
+                {
+                    "skill": skill_name,
+                    "justification": "Extracted from resume skills or experience section.",
+                    "experience_years": None,
+                }
+            )
+
+        elif isinstance(item, dict):
+            skill_name = (
+                item.get("skill")
+                or item.get("name")
+                or item.get("skill_name")
+            )
+
+            if not skill_name:
+                continue
+
+            skill_name = str(skill_name).strip()
+
+            if not skill_name:
+                continue
+
+            justification = item.get("justification")
+
+            if not justification:
+                justification = "Extracted from resume skills or experience section."
+
+            skill_experience = item.get("experience_years")
+
+            if skill_experience == "Unknown":
+                skill_experience = None
+
+            if isinstance(skill_experience, str):
+                skill_experience = extract_number_from_text(skill_experience)
+
+            if isinstance(skill_experience, float):
+                skill_experience = round(skill_experience, 1)
+
+            if not isinstance(skill_experience, (int, float)):
+                skill_experience = None
+
+            normalized.append(
+                {
+                    "skill": skill_name,
+                    "justification": str(justification).strip(),
+                    "experience_years": skill_experience,
+                }
+            )
+
+    unique = {}
+
+    for item in normalized:
+        key = item["skill"].lower()
+
+        if key not in unique:
+            unique[key] = item
+
+    return list(unique.values())
 
 
 def extract_number_from_text(value: str) -> int | None:

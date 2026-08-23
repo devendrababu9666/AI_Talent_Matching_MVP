@@ -1,7 +1,10 @@
 from langgraph.graph import StateGraph, START, END
 
 from app.graphs.ingestion.state import ResumeIngestionState
-from app.graphs.ingestion.nodes import ( extract_candidate_metadata, validate_candidate_metadata)
+from app.graphs.ingestion.nodes import (
+    extract_candidate_metadata,
+    validate_candidate_metadata,
+)
 
 
 graph = StateGraph(ResumeIngestionState)

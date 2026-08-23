@@ -22,6 +22,7 @@ def match_candidates(state):
         summary = result.get("matching_summary", {})
 
         matches.append({
+            "candidate_id": candidate["id"],
             "sap_id": candidate["sap_id"],
             "name": candidate["name"],
             "skills": candidate_skills,

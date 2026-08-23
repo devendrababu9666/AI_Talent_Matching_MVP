@@ -1,7 +1,6 @@
-"use client"
-
+"use client";
 import { useEffect, useState } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 
 import AppShell from "@/components/AppShell"
 
@@ -38,17 +37,56 @@ type Candidate = {
   currentStatus: string[]
 }
 
+type MatchResultSkill = {
+  jd_skill: string
+  candidate_skill: string
+  match_type?: string
+  candidate_experience_years?: number
+  jd_justification?: string
+  candidate_justification?: string
+  match_strength: string
+  match_reasoning?: string
+}
+
+type MatchResult = {
+  id: string
+  jd_id: string
+  candidate_id: string | null
+  sap_id: string
+  candidate_name: string
+  score: number
+  rank: number | null
+  reasoning: string
+  matching_summary: Record<string, unknown>
+  matched_skills: MatchResultSkill[]
+  unmatched_jd_skills: unknown[]
+  additional_candidate_skills: unknown[]
+  assessment_insights: {
+    recommendation?: string
+    strengths?: string[]
+    gaps?: string[]
+    transferable_skills?: string[]
+    overall_fit_score?: string | number
+  }
+  created_at: string
+}
+
 export default function CandidateSummaryPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
+
   const candidateKey = String(params.id || "")
+  const matchResultId = searchParams.get("matchResultId")
 
   const [candidate, setCandidate] = useState<Candidate | null>(null)
+  const [matchResult, setMatchResult] = useState<MatchResult | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
 
   useEffect(() => {
     fetchCandidate()
-  }, [candidateKey])
+    fetchMatchResult()
+  }, [candidateKey, matchResultId])
 
   async function fetchCandidate() {
     setIsLoading(true)
@@ -78,6 +116,29 @@ export default function CandidateSummaryPage() {
       setError("Unable to load candidate summary from backend.")
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  async function fetchMatchResult() {
+    if (!matchResultId) {
+      setMatchResult(null)
+      return
+    }
+
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/jd-matching/results/${matchResultId}`
+      )
+
+      if (!response.ok) {
+        throw new Error("Failed to load match result.")
+      }
+
+      const data: MatchResult = await response.json()
+      setMatchResult(data)
+    } catch (loadError) {
+      console.error(loadError)
+      setMatchResult(null)
     }
   }
 
@@ -136,6 +197,9 @@ export default function CandidateSummaryPage() {
     )
   }
 
+  const jdMatchValue = getJdMatchValue(candidate, matchResult)
+  const evidenceItems = getEvidenceItems(candidate, matchResult)
+
   return (
     <AppShell title="Candidate Summary">
       <div className="space-y-8">
@@ -167,7 +231,7 @@ export default function CandidateSummaryPage() {
 
             <div className="grid gap-3 sm:grid-cols-2 lg:w-[360px]">
               <MetricCard label="SAP ID" value={candidate.sapid} />
-              <MetricCard label="JD Match" value={`${candidate.matchScore}%`} />
+              <MetricCard label="JD Match" value={jdMatchValue} />
             </div>
           </div>
         </section>
@@ -197,7 +261,7 @@ export default function CandidateSummaryPage() {
 
               <SummaryBlock title="Match Evidence" color="#6B2BD9">
                 <ul className="space-y-3 text-sm text-slate-700">
-                  {candidate.evidence.map((item) => (
+                  {evidenceItems.map((item) => (
                     <li key={item} className="flex gap-2">
                       <span className="mt-2 h-1.5 w-1.5 rounded-full bg-[#0F5FDC]" />
                       <span>{item}</span>
@@ -227,6 +291,10 @@ export default function CandidateSummaryPage() {
             </ul>
           </div>
         </section>
+
+        <div className="rounded-2xl border border-[#D9E2EF] bg-[#F8FBFF] px-6 py-5 text-center text-sm font-bold text-slate-900 shadow-sm">
+          Suggested business output: concise email-ready summary + key match points + transparent availability.
+        </div>
       </div>
     </AppShell>
   )
@@ -241,7 +309,7 @@ function mapApiCandidateToSummary(apiCandidate: ApiCandidate): Candidate {
     experience: apiCandidate.experience_years || 0,
     location: apiCandidate.location || "Unknown",
     status: normalizeStatus(apiCandidate.status),
-    matchScore: 92,
+    matchScore: 0,
     summary:
       apiCandidate.summary ||
       "Candidate profile summary is not available yet.",
@@ -320,7 +388,7 @@ function CandidateStatusBadge({ status }: { status: CandidateStatus }) {
   )
 }
 
-function normalizeStatus(status: string | null): CandidateStatus {
+function normalizeStatus(status: string | null | undefined): CandidateStatus {
   if (status === "In Pipeline") {
     return "In Pipeline"
   }
@@ -339,4 +407,43 @@ function getInitials(name: string) {
     .join("")
     .slice(0, 2)
     .toUpperCase()
+}
+
+function getJdMatchValue(
+  candidate: Candidate,
+  matchResult: MatchResult | null
+): string {
+  if (matchResult && typeof matchResult.score === "number") {
+    return `${matchResult.score}%`
+  }
+
+  if (candidate.matchScore > 0) {
+    return `${candidate.matchScore}%`
+  }
+
+  return "Not available"
+}
+
+function getEvidenceItems(
+  candidate: Candidate,
+  matchResult: MatchResult | null
+): string[] {
+  if (matchResult?.matched_skills?.length) {
+    return matchResult.matched_skills.map((skill) => {
+      const skillName = skill.jd_skill || skill.candidate_skill
+      const strength = formatMatchStrength(skill.match_strength)
+
+      return `${skillName}: ${strength} evidence`
+    })
+  }
+
+  return candidate.evidence
+}
+
+function formatMatchStrength(strength: string): string {
+  if (!strength) {
+    return "Relevant"
+  }
+
+  return strength.charAt(0).toUpperCase() + strength.slice(1)
 }

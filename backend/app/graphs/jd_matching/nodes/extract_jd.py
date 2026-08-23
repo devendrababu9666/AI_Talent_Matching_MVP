@@ -32,7 +32,7 @@ def extract_jd(state):
 
     except Exception as exc:
         print(status)
-        raise Exception(f"Error in extract_jd: {exc}")
+        # raise Exception(f"Error in extract_jd: {exc}")
         print(f"Error in extract_jd: {exc}")
 
         return {

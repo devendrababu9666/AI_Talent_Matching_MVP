@@ -16,21 +16,6 @@ CREATE TABLE IF NOT EXISTS skills (
     name TEXT UNIQUE NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS candidate_skills (
-    candidate_id TEXT NOT NULL,
-    skill_id TEXT NOT NULL,
-
-    PRIMARY KEY (candidate_id, skill_id),
-
-    FOREIGN KEY (candidate_id)
-        REFERENCES candidates(id)
-        ON DELETE CASCADE,
-
-    FOREIGN KEY (skill_id)
-        REFERENCES skills(id)
-        ON DELETE CASCADE
-);
-
 CREATE TABLE IF NOT EXISTS resumes (
     id TEXT PRIMARY KEY,
     candidate_id TEXT,
@@ -50,6 +35,29 @@ CREATE TABLE IF NOT EXISTS resumes (
         ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS candidate_skills (
+    candidate_id TEXT NOT NULL,
+    skill_id TEXT NOT NULL,
+
+    justification TEXT,
+    experience_years REAL,
+    source_resume_id TEXT,
+
+    PRIMARY KEY (candidate_id, skill_id),
+
+    FOREIGN KEY (candidate_id)
+        REFERENCES candidates(id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (skill_id)
+        REFERENCES skills(id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (source_resume_id)
+        REFERENCES resumes(id)
+        ON DELETE SET NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_candidates_sap_id
 ON candidates(sap_id);
 
@@ -65,6 +73,14 @@ ON skills(name);
 CREATE INDEX IF NOT EXISTS idx_resumes_candidate_id
 ON resumes(candidate_id);
 
+CREATE INDEX IF NOT EXISTS idx_candidate_skills_candidate_id
+ON candidate_skills(candidate_id);
+
+CREATE INDEX IF NOT EXISTS idx_candidate_skills_skill_id
+ON candidate_skills(skill_id);
+
+CREATE INDEX IF NOT EXISTS idx_candidate_skills_source_resume_id
+ON candidate_skills(source_resume_id);
 
 CREATE TABLE IF NOT EXISTS job_descriptions (
     id TEXT PRIMARY KEY,
