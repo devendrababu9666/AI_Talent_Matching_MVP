@@ -10,7 +10,35 @@ router = APIRouter(
 
 class JDMatchRequest(BaseModel):
     jd_text: str
+# from fastapi import APIRouter, HTTPException
 
+from app.db.repositories.match_repository import (
+    get_match_summary_by_jd_and_sap_id,
+)
+
+# router = APIRouter(
+#     prefix="/api/jd-matching",
+#     tags=["JD Matching"],
+# )
+
+
+@router.get("/summary/{jd_id}/{sap_id}")
+def get_candidate_jd_summary(
+    jd_id: str,
+    sap_id: str,
+):
+    result = get_match_summary_by_jd_and_sap_id(
+        jd_id=jd_id,
+        sap_id=sap_id,
+    )
+
+    if not result:
+        raise HTTPException(
+            status_code=404,
+            detail="JD matching summary not found for this candidate.",
+        )
+
+    return result
 
 @router.post("/match")
 def match_jd(request: JDMatchRequest):

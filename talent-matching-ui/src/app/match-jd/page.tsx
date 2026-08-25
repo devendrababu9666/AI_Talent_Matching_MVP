@@ -566,6 +566,14 @@ type JDMatchedSkill = {
   match_reasoning?: string
 }
 
+// type RankedCandidate = {
+//   sapid: string
+//   name: string
+//   skills: string[]
+//   matchScore: number
+//   status: CandidateStatus
+//   matchResultId?: string
+// }
 type RankedCandidate = {
   sapid: string
   name: string
@@ -573,6 +581,7 @@ type RankedCandidate = {
   matchScore: number
   status: CandidateStatus
   matchResultId?: string
+  jdId: string
 }
 
 type ExtractedCriteria = {
@@ -602,6 +611,7 @@ type JDMatchingApiMatch = {
 
 type JDMatchingApiResponse = {
   status: string
+  jd_id: string
   jd: {
     primary_skills?: string[]
     skills?: string[]
@@ -711,6 +721,16 @@ export default function MatchJDPage() {
         location: data.jd.location || "Not specified",
       })
 
+      // const mappedCandidates: RankedCandidate[] = data.matches.map(
+      //   (match) => ({
+      //     sapid: match.sap_id,
+      //     name: match.name,
+      //     skills: extractMatchedSkillNames(match),
+      //     matchScore: match.match_score || 0,
+      //     status: normalizeStatus(match.status),
+      //     matchResultId: match.match_result_id,
+      //   })
+      // )
       const mappedCandidates: RankedCandidate[] = data.matches.map(
         (match) => ({
           sapid: match.sap_id,
@@ -719,9 +739,9 @@ export default function MatchJDPage() {
           matchScore: match.match_score || 0,
           status: normalizeStatus(match.status),
           matchResultId: match.match_result_id,
+          jdId: data.jd_id,
         })
       )
-
       setRankedCandidates(mappedCandidates)
       setBusinessRecommendation(
         data.business_decision?.recommendation || ""
@@ -979,6 +999,64 @@ function CriteriaRow({
   )
 }
 
+// function CandidateMatch({
+//   candidate,
+//   rank,
+// }: {
+//   candidate: RankedCandidate
+//   rank: number
+// }) {
+//   // const summaryHref = candidate.matchResultId
+//   //   ? `/summary/${candidate.sapid}?matchResultId=${candidate.matchResultId}`
+//   //   : `/summary/${candidate.sapid}`
+//   const summaryHref = `/summary/${candidate.jdId}/${candidate.sapid}`
+
+//   return (
+//     <div className="rounded-lg border border-slate-200 bg-white p-4 transition-shadow hover:shadow-sm">
+//       <div className="flex items-center gap-4">
+//         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-sm font-semibold text-[#0F5FDC]">
+//           {rank}
+//         </div>
+
+//         <div className="min-w-0 flex-1">
+//           <p className="font-semibold text-slate-900">
+//             {candidate.name}
+//           </p>
+
+//           <p className="mt-1 truncate text-xs text-slate-500">
+//             {candidate.skills.length > 0
+//               ? candidate.skills.join(" | ")
+//               : "No matched skills"}
+//           </p>
+//         </div>
+
+//         <div className="w-20 text-center">
+//           <p className="text-2xl font-bold text-[#0F5FDC]">
+//             {candidate.matchScore}%
+//           </p>
+
+//           <Progress
+//             value={candidate.matchScore}
+//             className="mt-1 h-1.5"
+//           />
+//         </div>
+
+//         <div className="hidden w-28 sm:block">
+//           <StatusBadge status={candidate.status} />
+//         </div>
+
+//         <Button
+//           variant="link"
+//           className="shrink-0 font-medium text-slate-700 hover:text-[#0F5FDC]"
+//         >
+//           <Link href={summaryHref}>
+//             View Summary
+//           </Link>
+//         </Button>
+//       </div>
+//     </div>
+//   )
+// }
 function CandidateMatch({
   candidate,
   rank,
@@ -986,9 +1064,7 @@ function CandidateMatch({
   candidate: RankedCandidate
   rank: number
 }) {
-  const summaryHref = candidate.matchResultId
-    ? `/summary/${candidate.sapid}?matchResultId=${candidate.matchResultId}`
-    : `/summary/${candidate.sapid}`
+  const summaryHref = `/summary/${candidate.jdId}/${candidate.sapid}`
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 transition-shadow hover:shadow-sm">
