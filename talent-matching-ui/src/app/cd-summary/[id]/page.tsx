@@ -83,64 +83,96 @@ export default function CandidateSummaryPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
 
+ 
+  // async function fetchCandidate() {
+  //   setIsLoading(true)
+  //   setError("")
+
+  //   try {
+  //     const response = await fetch("http://localhost:8000/api/candidates")
+
+  //     if (!response.ok) {
+  //       throw new Error("Failed to load candidate data.")
+  //     }
+
+  //     const data: CandidatesApiResponse = await response.json()
+
+  //     const matchedCandidate = data.candidates.find(
+  //       (item) => item.sap_id === candidateKey || item.id === candidateKey
+  //     )
+
+  //     if (!matchedCandidate) {
+  //       setCandidate(null)
+  //       return
+  //     }
+
+  //     setCandidate(mapApiCandidateToSummary(matchedCandidate))
+  //   } catch (loadError) {
+  //     console.error(loadError)
+  //     setError("Unable to load candidate summary from backend.")
+  //   } finally {
+  //     setIsLoading(false)
+  //   }
+  // }
+
+  // async function fetchMatchResult() {
+  //   if (!matchResultId) {
+  //     setMatchResult(null)
+  //     return
+  //   }
+
+  //   try {
+  //     const response = await fetch(
+  //       `http://localhost:8000/api/jd-matching/results/${matchResultId}`
+  //     )
+
+  //     if (!response.ok) {
+  //       throw new Error("Failed to load match result.")
+  //     }
+
+  //     const data: MatchResult = await response.json()
+  //     setMatchResult(data)
+  //   } catch (loadError) {
+  //     console.error(loadError)
+  //     setMatchResult(null)
+  //   }
+  // }
+  //  useEffect(() => {
+  //   fetchCandidate()
+  //   fetchMatchResult()
+  // }, [candidateKey, matchResultId])
   useEffect(() => {
-    fetchCandidate()
-    fetchMatchResult()
+    async function loadData() {
+      setIsLoading(true)
+      setError("")
+
+      try {
+        const response = await fetch("http://localhost:8000/api/candidates")
+        const data: CandidatesApiResponse = await response.json()
+        const matchedCandidate = data.candidates.find(
+          (item) => item.sap_id === candidateKey || item.id === candidateKey
+        )
+        setCandidate(matchedCandidate ? mapApiCandidateToSummary(matchedCandidate) : null)
+      } catch {
+        setError("Unable to load candidate summary from backend.")
+      } finally {
+        setIsLoading(false)
+      }
+
+      if (matchResultId) {
+        try {
+          const response = await fetch(`http://localhost:8000/api/jd-matching/results/${matchResultId}`)
+          const data: MatchResult = await response.json()
+          setMatchResult(data)
+        } catch {
+          setMatchResult(null)
+        }
+      }
+    }
+
+    loadData()
   }, [candidateKey, matchResultId])
 
-  async function fetchCandidate() {
-    setIsLoading(true)
-    setError("")
-
-    try {
-      const response = await fetch("http://localhost:8000/api/candidates")
-
-      if (!response.ok) {
-        throw new Error("Failed to load candidate data.")
-      }
-
-      const data: CandidatesApiResponse = await response.json()
-
-      const matchedCandidate = data.candidates.find(
-        (item) => item.sap_id === candidateKey || item.id === candidateKey
-      )
-
-      if (!matchedCandidate) {
-        setCandidate(null)
-        return
-      }
-
-      setCandidate(mapApiCandidateToSummary(matchedCandidate))
-    } catch (loadError) {
-      console.error(loadError)
-      setError("Unable to load candidate summary from backend.")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  async function fetchMatchResult() {
-    if (!matchResultId) {
-      setMatchResult(null)
-      return
-    }
-
-    try {
-      const response = await fetch(
-        `http://localhost:8000/api/jd-matching/results/${matchResultId}`
-      )
-
-      if (!response.ok) {
-        throw new Error("Failed to load match result.")
-      }
-
-      const data: MatchResult = await response.json()
-      setMatchResult(data)
-    } catch (loadError) {
-      console.error(loadError)
-      setMatchResult(null)
-    }
-  }
 
   if (isLoading) {
     return (
